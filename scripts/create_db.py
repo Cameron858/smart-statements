@@ -26,14 +26,34 @@ def import_csv_to_db(csv_path: Path, connection: sqlite3.Connection) -> None:
     dataframe = dataframe.copy()
     dataframe.insert(0, "source_file", csv_path.name)
 
+    for column in dataframe.columns:
+        if str(column).lower() == "date":
+            dataframe[column] = pd.to_datetime(dataframe[column], errors="coerce")
+
     columns = [sanitize_identifier(str(column)) for column in dataframe.columns]
-    column_definitions = ", ".join(f'"{name}" TEXT' for name in columns)
+    column_definitions = []
+    for original_name, sanitized_name in zip(dataframe.columns, columns):
+        if str(original_name).lower() == "date":
+            column_definitions.append(f'"{sanitized_name}" TIMESTAMP')
+        else:
+            column_definitions.append(f'"{sanitized_name}" TEXT')
+
     connection.execute(
-        f'CREATE TABLE IF NOT EXISTS "{TABLE_NAME}" ({column_definitions})'
+        f'CREATE TABLE IF NOT EXISTS "{TABLE_NAME}" ({", ".join(column_definitions)})'
     )
 
     for row in dataframe.itertuples(index=False, name=None):
-        values = [None if pd.isna(value) else value for value in row]
+        values = []
+        for index, value in enumerate(row):
+            if pd.isna(value):
+                values.append(None)
+            elif str(dataframe.columns[index]).lower() == "date" and hasattr(
+                value, "to_pydatetime"
+            ):
+                values.append(value.to_pydatetime().isoformat())
+            else:
+                values.append(value)
+
         placeholders = ", ".join(["?"] * len(values))
         column_names = ", ".join(f'"{name}"' for name in columns)
         connection.execute(
