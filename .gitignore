@@ -220,3 +220,6 @@ __marimo__/
 # Ignore all contents of data/ except the .gitkeep file
 data/*
 !data/.gitkeep
+
+# SQLite
+*.db
